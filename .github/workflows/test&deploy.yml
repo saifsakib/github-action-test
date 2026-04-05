@@ -188,7 +188,7 @@ jobs:
             printf '%s\n' \
               'server {' \
               '    listen 80;' \
-              '    server_name _;' \
+              '    server_name 52.66.22.90;' \
               '' \
               '    root /var/www/${{ env.FRONTEND_DEPLOY_PATH }};' \
               '    index index.html;' \
