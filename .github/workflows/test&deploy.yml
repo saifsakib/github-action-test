@@ -169,7 +169,7 @@ jobs:
             # Build frontend
             echo "Building frontend..."
             pm2 start npm --name "github-action-test" -- start
-            
+            pm2 save
             # Check if Nginx is installed
             if ! command -v nginx &> /dev/null; then
               echo "Warning: Nginx not found. Skipping frontend deployment."
