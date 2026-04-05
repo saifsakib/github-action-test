@@ -239,8 +239,8 @@ jobs:
           echo ""
         ENDSSH
 
-    - name: Upload test results
-          uses: actions/upload-artifact@v3
-          with:
-            name: deploy-results
-            path: ./deploy-results.xml
+    - name: Upload deploy results
+      uses: actions/upload-artifact@v3
+      with:
+        name: deploy-results
+        path: ./deploy-results.xml
