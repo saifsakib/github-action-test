@@ -168,7 +168,7 @@ jobs:
             
             # Build frontend
             echo "Building frontend..."
-            npm run build
+            npm start
             
             # Check if Nginx is installed
             if ! command -v nginx &> /dev/null; then
