@@ -27,7 +27,7 @@ jobs:
       
       - name: Run tests and save results
         run: |
-          npm run check | tee ./test-results.log
+          npm run check | tee ./test-results.xml
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -240,7 +240,7 @@ jobs:
           echo "Deployment Completed Successfully"
           echo "=========================================="
           echo ""
-        ENDSSH | tee ./deploy-results.log
+        ENDSSH | tee ./deploy-results.xml
 
     - name: Upload deploy results
       uses: actions/upload-artifact@v4
