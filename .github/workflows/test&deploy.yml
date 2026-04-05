@@ -130,3 +130,102 @@ jobs:
           echo ""
         ENDSSH
 
+    - name: Deploy application
+      run: |
+        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << "ENDSSH"
+          set -e
+          
+          # Load NVM
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          
+          # Use Node LTS
+          nvm use ${{ env.NODE_VERSION }}
+          
+          echo "=========================================="
+          echo "Deploying Application"
+          echo "=========================================="
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          echo ""
+          
+          # Clone or pull repository
+          if [ ! -d "${{ env.DEPLOY_PATH }}" ]; then
+            echo "Fresh deployment - cloning repository..."
+            git clone https://github.com/${{ github.repository }}.git ${{ env.DEPLOY_PATH }}
+          else
+            echo "Updating existing deployment..."
+            cd ${{ env.DEPLOY_PATH }}
+            git fetch origin
+            git reset --hard origin/main
+          fi
+          
+          cd ${{ env.DEPLOY_PATH }}
+
+          # Install dependencies
+            echo "Installing frontend dependencies..."
+            npm install
+            
+            # Build frontend
+            echo "Building frontend..."
+            npm run build
+            
+            # Check if Nginx is installed
+            if ! command -v nginx &> /dev/null; then
+              echo "Warning: Nginx not found. Skipping frontend deployment."
+              echo "Please install Nginx manually or re-run the prerequisite installation."
+              cd ..
+              exit 0
+            fi
+            
+            # Deploy to Nginx
+            echo "Deploying to Nginx..."
+            sudo mkdir -p ${{ env.FRONTEND_DEPLOY_PATH }}
+            sudo cp -r dist/* ${{ env.FRONTEND_DEPLOY_PATH }}/
+            sudo chown -R www-data:www-data ${{ env.FRONTEND_DEPLOY_PATH }}
+            
+            # Configure Nginx
+            echo "Creating Nginx configuration..."
+            printf '%s\n' \
+              'server {' \
+              '    listen 80;' \
+              '    server_name _;' \
+              '' \
+              '    root /var/www/bmi-health-tracker;' \
+              '    index index.html;' \
+              '' \
+              '    location / {' \
+              '        try_files $uri $uri/ /index.html;' \
+              '    }' \
+              '' \
+              '    location /api/ {' \
+              '        proxy_pass http://127.0.0.1:3000/api/;' \
+              '        proxy_http_version 1.1;' \
+              '        proxy_set_header Upgrade $http_upgrade;' \
+              '        proxy_set_header Connection '"'"'upgrade'"'"';' \
+              '        proxy_set_header Host $host;' \
+              '        proxy_cache_bypass $http_upgrade;' \
+              '        proxy_set_header X-Real-IP $remote_addr;' \
+              '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+              '    }' \
+              '}' | sudo tee /etc/nginx/sites-available/bmi-health-tracker > /dev/null
+            
+            sudo ln -sf /etc/nginx/sites-available/bmi-health-tracker /etc/nginx/sites-enabled/
+            sudo rm -f /etc/nginx/sites-enabled/default
+            
+            # Test Nginx config
+            sudo nginx -t
+            
+            # Reload Nginx
+            sudo systemctl reload nginx
+            
+            echo "Frontend deployed successfully"
+            cd ..
+          fi
+          
+          echo ""
+          echo "=========================================="
+          echo "Deployment Completed Successfully"
+          echo "=========================================="
+          echo ""
+        ENDSSH
