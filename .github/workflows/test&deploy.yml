@@ -26,6 +26,12 @@ jobs:
       - run: npm install
       - run: npm run check
 
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: ./test-results.xml 
+
   deploy:
     runs-on: self-hosted
     needs: test
@@ -232,3 +238,9 @@ jobs:
           echo "=========================================="
           echo ""
         ENDSSH
+
+      - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: deploy-results
+        path: ./deploy-results.xml
