@@ -1,0 +1,132 @@
+name: Test & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DEPLOY_PATH: /home/ubuntu/github-action-test
+  FRONTEND_DEPLOY_PATH: /var/www/github-action-test
+  # DB_NAME: bmidb
+  # DB_USER: bmi_user
+  NODE_VERSION: '22'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    ##runs-on: [self-hosted, Linux, X64]
+    # runs-on: self-hosted
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.EC2_KEY }}
+        log-public-key: true
+
+    - name: Configure SSH to skip host key checking
+      run: |
+        mkdir -p ~/.ssh
+        cat >> ~/.ssh/config <<EOF
+        Host ${{ secrets.EC2_HOST }}
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+        EOF
+        chmod 600 ~/.ssh/config
+
+    - name: Test SSH Connection
+      run: |
+        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "echo 'SSH connection successful'"
+
+    - name: Get Runner Public IP
+      run: |
+        echo "=========================================="
+        echo "Runner Public IP Information"
+        echo "=========================================="
+        RUNNER_IP=$(curl -s http://api.ipify.org/?format=text)
+        echo "Runner Public IP: $RUNNER_IP"
+        echo "runner_ip=$RUNNER_IP" >> $GITHUB_OUTPUT        
+
+    - name: Install Prerequisites (if needed)
+      run: |
+        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << "ENDSSH"
+          set -e
+          
+          echo "=========================================="
+          echo "Installing/Verifying Prerequisites"
+          echo "=========================================="
+          
+          # Function to install NVM if not present
+          install_nvm() {
+            if [ ! -d "$HOME/.nvm" ]; then
+              echo "Installing NVM..."
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              echo "NVM installed"
+            else
+              echo "NVM already installed"
+            fi
+          }
+          
+          # Function to load NVM
+          load_nvm() {
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          }
+          
+          # Install NVM
+          install_nvm
+          
+          # Load NVM
+          load_nvm
+          
+          # Install Node.js if not present
+          if ! command -v node &> /dev/null; then
+            echo "Installing Node.js ${{ env.NODE_VERSION }}..."
+            nvm install ${{ env.NODE_VERSION }}
+            nvm use ${{ env.NODE_VERSION }}
+            nvm alias default ${{ env.NODE_VERSION }}
+            echo "Node.js $(node --version) installed"
+          else
+            echo "Node.js $(node --version) already installed"
+            nvm install ${{ env.NODE_VERSION }}
+            nvm use ${{ env.NODE_VERSION }}
+          fi
+          
+          # Install PM2 if not present
+          if ! command -v pm2 &> /dev/null; then
+            echo "Installing PM2..."
+            npm install -g pm2
+            echo "PM2 installed"
+          else
+            echo "PM2 $(pm2 --version) already installed"
+          fi
+          
+          # Install Nginx if not present
+          if ! command -v nginx &> /dev/null; then
+            echo "Installing Nginx..."
+            sudo apt update
+            sudo apt install -y nginx
+            sudo systemctl enable nginx
+            sudo systemctl start nginx
+            echo "Nginx installed and started"
+          else
+            echo "Nginx already installed"
+            sudo systemctl is-active nginx || sudo systemctl start nginx
+          fi
+          
+          # Verify installations
+          echo ""
+          echo "Installed versions:"
+          echo "  Node: $(node --version)"
+          echo "  npm: $(npm --version)"
+          echo "  PM2: $(pm2 --version)"
+          echo "  Nginx: $(nginx -v 2>&1 | cut -d/ -f2)"
+          echo ""
+        ENDSSH
+
